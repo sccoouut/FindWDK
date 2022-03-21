@@ -90,6 +90,15 @@ else()
     message(FATAL_ERROR "Unsupported architecture")
 endif()
 
+set(WINSDK ${WDK_ROOT}/bin/${WDK_VERSION}/${WDK_PLATFORM})
+set(OPENSSL "openssl.exe")
+set(MAKECERT "${WINSDK}/makecert.exe")
+set(CERTUTIL "certutil.exe")
+set(CERTMGR "certmgr.exe")
+set(CERT2SPC "cert2spc.exe")
+set(PVK2PFX "${WINSDK}/pvk2pfx.exe")
+set(SIGNTOOL "${WINSDK}/signtool.exe")
+
 string(CONCAT WDK_LINK_FLAGS
     "/MANIFEST:NO " #
     "/DRIVER " #
@@ -104,12 +113,16 @@ string(CONCAT WDK_LINK_FLAGS
     )
 
 # Generate imported targets for WDK lib files
-file(GLOB WDK_LIBRARIES "${WDK_ROOT}/Lib/${WDK_VERSION}/km/${WDK_PLATFORM}/*.lib")    
+file(GLOB WDK_LIBRARIES "${WDK_ROOT}/Lib/${WDK_VERSION}/km/${WDK_PLATFORM}/*.lib")
 foreach(LIBRARY IN LISTS WDK_LIBRARIES)
     get_filename_component(LIBRARY_NAME ${LIBRARY} NAME_WE)
     string(TOUPPER ${LIBRARY_NAME} LIBRARY_NAME)
-    add_library(WDK::${LIBRARY_NAME} INTERFACE IMPORTED)
-    set_property(TARGET WDK::${LIBRARY_NAME} PROPERTY INTERFACE_LINK_LIBRARIES  ${LIBRARY})
+
+    # Protect against multiple inclusion, which would fail when already imported targets are added once more.
+    if(NOT TARGET WDK::${LIBRARY_NAME})
+        add_library(WDK::${LIBRARY_NAME} INTERFACE IMPORTED)
+        set_property(TARGET WDK::${LIBRARY_NAME} PROPERTY INTERFACE_LINK_LIBRARIES  ${LIBRARY})
+    endif()
 endforeach(LIBRARY)
 unset(WDK_LIBRARIES)
 
@@ -177,4 +190,45 @@ function(wdk_add_library _target)
     if(DEFINED WDK_KMDF)
         target_include_directories(${_target} SYSTEM PRIVATE "${WDK_ROOT}/Include/wdf/kmdf/${WDK_KMDF}")
     endif()
+endfunction()
+
+function(wdk_make_certificate _target _certificate_name)
+    cmake_parse_arguments(WDK "" "CERTIFICATE_PATH;COMPANY" "" ${ARGN})
+
+    if(NOT DEFINED WDK_CERTIFICATE_PATH)
+        set(WDK_CERTIFICATE_PATH ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
+    if(NOT DEFINED WDK_COMPANY)
+        set(WDK_COMPANY "NoCompany")
+    endif()
+
+    add_custom_command(OUTPUT ${_certificate_name}.pfx
+            COMMAND "${CMAKE_COMMAND}" -E remove ${_certificate_name}.pvk ${_certificate_name}.cer ${_certificate_name}.pfx ${_certificate_name}.spc
+            COMMAND "${MAKECERT}" -r -n \"CN=${WDK_COMPANY}\" -sv ${_certificate_name}.pvk ${_certificate_name}.cer
+            COMMAND "${CERTMGR}" -add ${_certificate_name}.cer -s -r currentUser ROOT
+            COMMAND "${CERTMGR}" -add ${_certificate_name}.cer -s -r currentUser TRUSTEDPUBLISHER
+            COMMAND "${CERT2SPC}" ${_certificate_name}.cer ${_certificate_name}.spc
+            COMMAND "${PVK2PFX}" -pvk ${_certificate_name}.pvk -spc ${_certificate_name}.spc -pfx ${_certificate_name}.pfx
+            WORKING_DIRECTORY "${WDK_CERTIFICATE_PATH}"
+            COMMENT "Generating SSL certificates to sign the drivers and executable ..."
+            )
+    add_custom_target(${_certificate_name}
+            DEPENDS ${_certificate_name}.pfx)
+    add_dependencies(${_target} ${_certificate_name})
+endfunction()
+
+function(wdk_sign_driver _target _certificate_name)
+    cmake_parse_arguments(WDK "" "CERTIFICATE_PATH;TIMESTAMP_SERVER" "" ${ARGN})
+
+    if(NOT DEFINED WDK_CERTIFICATE_PATH)
+        set(WDK_CERTIFICATE_PATH ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
+    if(NOT DEFINED WDK_TIMESTAMP_SERVER)
+        set(WDK_TIMESTAMP_SERVER http://timestamp.verisign.com/scripts/timstamp.dll)
+    endif()
+
+    add_custom_command(TARGET ${_target}
+            COMMAND "${SIGNTOOL}" sign /v /fd sha256 /f  "${WDK_CERTIFICATE_PATH}/${_certificate_name}.pfx" /t ${WDK_TIMESTAMP_SERVER} $<TARGET_FILE:${_target}>
+            COMMENT "Signing $<TARGET_FILE:${_target} ..."
+            )
 endfunction()
