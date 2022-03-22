@@ -31,26 +31,26 @@
 #   target_link_libraries(KmdfCppDriver KmdfCppLib)
 #
 
-if(DEFINED ENV{WDKContentRoot})
+if (DEFINED ENV{WDKContentRoot})
     file(GLOB WDK_NTDDK_FILES
-        "$ENV{WDKContentRoot}/Include/*/km/ntddk.h"
-    )
-else()
+            "$ENV{WDKContentRoot}/Include/*/km/ntddk.h"
+            )
+else ()
     file(GLOB WDK_NTDDK_FILES
-        "C:/Program Files*/Windows Kits/10/Include/*/km/ntddk.h"
-    )
-endif()
+            "C:/Program Files*/Windows Kits/10/Include/*/km/ntddk.h"
+            )
+endif ()
 
-if(WDK_NTDDK_FILES)
+if (WDK_NTDDK_FILES)
     list(GET WDK_NTDDK_FILES -1 WDK_LATEST_NTDDK_FILE)
-endif()
+endif ()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(WDK REQUIRED_VARS WDK_LATEST_NTDDK_FILE)
 
 if (NOT WDK_LATEST_NTDDK_FILE)
     return()
-endif()
+endif ()
 
 get_filename_component(WDK_ROOT ${WDK_LATEST_NTDDK_FILE} DIRECTORY)
 get_filename_component(WDK_ROOT ${WDK_ROOT} DIRECTORY)
@@ -68,27 +68,27 @@ file(WRITE ${WDK_ADDITIONAL_FLAGS_FILE} "#pragma runtime_checks(\"suc\", off)")
 
 string(REPLACE "/GR" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 set(WDK_COMPILE_FLAGS
-    "/Zp8" # set struct alignment
-    "/GF"  # enable string pooling
-    "/GR-" # disable RTTI
-    "/Gz" # __stdcall by default
-    "/kernel"  # create kernel mode binary
-    "/FIwarning.h" # disable warnings in WDK headers
-    "/FI${WDK_ADDITIONAL_FLAGS_FILE}" # include file to disable RTC
-    )
+        "/Zp8" # set struct alignment
+        "/GF"  # enable string pooling
+        "/GR-" # disable RTTI
+        "/Gz" # __stdcall by default
+        "/kernel"  # create kernel mode binary
+        "/FIwarning.h" # disable warnings in WDK headers
+        "/FI${WDK_ADDITIONAL_FLAGS_FILE}" # include file to disable RTC
+        )
 
 set(WDK_COMPILE_DEFINITIONS "WINNT=1")
 set(WDK_COMPILE_DEFINITIONS_DEBUG "MSC_NOOPT;DEPRECATE_DDK_FUNCTIONS=1;DBG=1")
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+if (CMAKE_SIZEOF_VOID_P EQUAL 4)
     list(APPEND WDK_COMPILE_DEFINITIONS "_X86_=1;i386=1;STD_CALL")
     set(WDK_PLATFORM "x86")
-elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
+elseif (CMAKE_SIZEOF_VOID_P EQUAL 8)
     list(APPEND WDK_COMPILE_DEFINITIONS "_WIN64;_AMD64_;AMD64")
     set(WDK_PLATFORM "x64")
-else()
+else ()
     message(FATAL_ERROR "Unsupported architecture")
-endif()
+endif ()
 
 set(WINSDK ${WDK_ROOT}/bin/${WDK_VERSION}/${WDK_PLATFORM})
 set(OPENSSL "openssl.exe")
@@ -100,30 +100,30 @@ set(PVK2PFX "${WINSDK}/pvk2pfx.exe")
 set(SIGNTOOL "${WINSDK}/signtool.exe")
 
 string(CONCAT WDK_LINK_FLAGS
-    "/MANIFEST:NO " #
-    "/DRIVER " #
-    "/OPT:REF " #
-    "/INCREMENTAL:NO " #
-    "/OPT:ICF " #
-    "/SUBSYSTEM:NATIVE " #
-    "/MERGE:_TEXT=.text;_PAGE=PAGE " #
-    "/NODEFAULTLIB " # do not link default CRT
-    "/SECTION:INIT,d " #
-    "/VERSION:10.0 " #
-    )
+        "/MANIFEST:NO " #
+        "/DRIVER " #
+        "/OPT:REF " #
+        "/INCREMENTAL:NO " #
+        "/OPT:ICF " #
+        "/SUBSYSTEM:NATIVE " #
+        "/MERGE:_TEXT=.text;_PAGE=PAGE " #
+        "/NODEFAULTLIB " # do not link default CRT
+        "/SECTION:INIT,d " #
+        "/VERSION:10.0 " #
+        )
 
 # Generate imported targets for WDK lib files
 file(GLOB WDK_LIBRARIES "${WDK_ROOT}/Lib/${WDK_VERSION}/km/${WDK_PLATFORM}/*.lib")
-foreach(LIBRARY IN LISTS WDK_LIBRARIES)
+foreach (LIBRARY IN LISTS WDK_LIBRARIES)
     get_filename_component(LIBRARY_NAME ${LIBRARY} NAME_WE)
     string(TOUPPER ${LIBRARY_NAME} LIBRARY_NAME)
 
     # Protect against multiple inclusion, which would fail when already imported targets are added once more.
-    if(NOT TARGET WDK::${LIBRARY_NAME})
+    if (NOT TARGET WDK::${LIBRARY_NAME})
         add_library(WDK::${LIBRARY_NAME} INTERFACE IMPORTED)
-        set_property(TARGET WDK::${LIBRARY_NAME} PROPERTY INTERFACE_LINK_LIBRARIES  ${LIBRARY})
-    endif()
-endforeach(LIBRARY)
+        set_property(TARGET WDK::${LIBRARY_NAME} PROPERTY INTERFACE_LINK_LIBRARIES ${LIBRARY})
+    endif ()
+endforeach (LIBRARY)
 unset(WDK_LIBRARIES)
 
 function(wdk_add_driver _target)
@@ -134,41 +134,41 @@ function(wdk_add_driver _target)
     set_target_properties(${_target} PROPERTIES SUFFIX ".sys")
     set_target_properties(${_target} PROPERTIES COMPILE_OPTIONS "${WDK_COMPILE_FLAGS}")
     set_target_properties(${_target} PROPERTIES COMPILE_DEFINITIONS
-        "${WDK_COMPILE_DEFINITIONS};$<$<CONFIG:Debug>:${WDK_COMPILE_DEFINITIONS_DEBUG}>;_WIN32_WINNT=${WDK_WINVER}"
-        )
+            "${WDK_COMPILE_DEFINITIONS};$<$<CONFIG:Debug>:${WDK_COMPILE_DEFINITIONS_DEBUG}>;_WIN32_WINNT=${WDK_WINVER}"
+            )
     set_target_properties(${_target} PROPERTIES LINK_FLAGS "${WDK_LINK_FLAGS}")
 
     target_include_directories(${_target} SYSTEM PRIVATE
-        "${WDK_ROOT}/Include/${WDK_VERSION}/shared"
-        "${WDK_ROOT}/Include/${WDK_VERSION}/km"
-        "${WDK_ROOT}/Include/${WDK_VERSION}/km/crt"
-        )
+            "${WDK_ROOT}/Include/${WDK_VERSION}/shared"
+            "${WDK_ROOT}/Include/${WDK_VERSION}/km"
+            "${WDK_ROOT}/Include/${WDK_VERSION}/km/crt"
+            )
 
     target_link_libraries(${_target} WDK::NTOSKRNL WDK::HAL WDK::BUFFEROVERFLOWK WDK::WMILIB)
 
-    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    if (CMAKE_SIZEOF_VOID_P EQUAL 4)
         target_link_libraries(${_target} WDK::MEMCMP)
-    endif()
+    endif ()
 
-    if(DEFINED WDK_KMDF)
+    if (DEFINED WDK_KMDF)
         target_include_directories(${_target} SYSTEM PRIVATE "${WDK_ROOT}/Include/wdf/kmdf/${WDK_KMDF}")
         target_link_libraries(${_target}
-            "${WDK_ROOT}/Lib/wdf/kmdf/${WDK_PLATFORM}/${WDK_KMDF}/WdfDriverEntry.lib"
-            "${WDK_ROOT}/Lib/wdf/kmdf/${WDK_PLATFORM}/${WDK_KMDF}/WdfLdr.lib"
-            )
+                "${WDK_ROOT}/Lib/wdf/kmdf/${WDK_PLATFORM}/${WDK_KMDF}/WdfDriverEntry.lib"
+                "${WDK_ROOT}/Lib/wdf/kmdf/${WDK_PLATFORM}/${WDK_KMDF}/WdfLdr.lib"
+                )
 
-        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        if (CMAKE_SIZEOF_VOID_P EQUAL 4)
             set_property(TARGET ${_target} APPEND_STRING PROPERTY LINK_FLAGS "/ENTRY:FxDriverEntry@8")
-        elseif(CMAKE_SIZEOF_VOID_P  EQUAL 8)
+        elseif (CMAKE_SIZEOF_VOID_P EQUAL 8)
             set_property(TARGET ${_target} APPEND_STRING PROPERTY LINK_FLAGS "/ENTRY:FxDriverEntry")
-        endif()
-    else()
-        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        endif ()
+    else ()
+        if (CMAKE_SIZEOF_VOID_P EQUAL 4)
             set_property(TARGET ${_target} APPEND_STRING PROPERTY LINK_FLAGS "/ENTRY:GsDriverEntry@8")
-        elseif(CMAKE_SIZEOF_VOID_P  EQUAL 8)
+        elseif (CMAKE_SIZEOF_VOID_P EQUAL 8)
             set_property(TARGET ${_target} APPEND_STRING PROPERTY LINK_FLAGS "/ENTRY:GsDriverEntry")
-        endif()
-    endif()
+        endif ()
+    endif ()
 endfunction()
 
 function(wdk_add_library _target)
@@ -177,30 +177,30 @@ function(wdk_add_library _target)
     add_library(${_target} ${WDK_UNPARSED_ARGUMENTS})
 
     set_target_properties(${_target} PROPERTIES COMPILE_OPTIONS "${WDK_COMPILE_FLAGS}")
-    set_target_properties(${_target} PROPERTIES COMPILE_DEFINITIONS 
-        "${WDK_COMPILE_DEFINITIONS};$<$<CONFIG:Debug>:${WDK_COMPILE_DEFINITIONS_DEBUG};>_WIN32_WINNT=${WDK_WINVER}"
-        )
+    set_target_properties(${_target} PROPERTIES COMPILE_DEFINITIONS
+            "${WDK_COMPILE_DEFINITIONS};$<$<CONFIG:Debug>:${WDK_COMPILE_DEFINITIONS_DEBUG};>_WIN32_WINNT=${WDK_WINVER}"
+            )
 
     target_include_directories(${_target} SYSTEM PRIVATE
-        "${WDK_ROOT}/Include/${WDK_VERSION}/shared"
-        "${WDK_ROOT}/Include/${WDK_VERSION}/km"
-        "${WDK_ROOT}/Include/${WDK_VERSION}/km/crt"
-        )
+            "${WDK_ROOT}/Include/${WDK_VERSION}/shared"
+            "${WDK_ROOT}/Include/${WDK_VERSION}/km"
+            "${WDK_ROOT}/Include/${WDK_VERSION}/km/crt"
+            )
 
-    if(DEFINED WDK_KMDF)
+    if (DEFINED WDK_KMDF)
         target_include_directories(${_target} SYSTEM PRIVATE "${WDK_ROOT}/Include/wdf/kmdf/${WDK_KMDF}")
-    endif()
+    endif ()
 endfunction()
 
 function(wdk_make_certificate _target _certificate_name)
     cmake_parse_arguments(WDK "" "CERTIFICATE_PATH;COMPANY" "" ${ARGN})
 
-    if(NOT DEFINED WDK_CERTIFICATE_PATH)
+    if (NOT DEFINED WDK_CERTIFICATE_PATH)
         set(WDK_CERTIFICATE_PATH ${CMAKE_CURRENT_BINARY_DIR})
-    endif()
-    if(NOT DEFINED WDK_COMPANY)
+    endif ()
+    if (NOT DEFINED WDK_COMPANY)
         set(WDK_COMPANY "NoCompany")
-    endif()
+    endif ()
 
     add_custom_command(OUTPUT ${_certificate_name}.pfx
             COMMAND "${CMAKE_COMMAND}" -E remove ${_certificate_name}.pvk ${_certificate_name}.cer ${_certificate_name}.pfx ${_certificate_name}.spc
@@ -220,15 +220,15 @@ endfunction()
 function(wdk_sign_driver _target _certificate_name)
     cmake_parse_arguments(WDK "" "CERTIFICATE_PATH;TIMESTAMP_SERVER" "" ${ARGN})
 
-    if(NOT DEFINED WDK_CERTIFICATE_PATH)
+    if (NOT DEFINED WDK_CERTIFICATE_PATH)
         set(WDK_CERTIFICATE_PATH ${CMAKE_CURRENT_BINARY_DIR})
-    endif()
-    if(NOT DEFINED WDK_TIMESTAMP_SERVER)
+    endif ()
+    if (NOT DEFINED WDK_TIMESTAMP_SERVER)
         set(WDK_TIMESTAMP_SERVER http://timestamp.verisign.com/scripts/timstamp.dll)
-    endif()
+    endif ()
 
     add_custom_command(TARGET ${_target}
-            COMMAND "${SIGNTOOL}" sign /v /fd sha256 /f  "${WDK_CERTIFICATE_PATH}/${_certificate_name}.pfx" /t ${WDK_TIMESTAMP_SERVER} $<TARGET_FILE:${_target}>
+            COMMAND "${SIGNTOOL}" sign /v /fd sha256 /f "${WDK_CERTIFICATE_PATH}/${_certificate_name}.pfx" /t ${WDK_TIMESTAMP_SERVER} $<TARGET_FILE:${_target}>
             COMMENT "Signing $<TARGET_FILE:${_target} ..."
             )
 endfunction()
